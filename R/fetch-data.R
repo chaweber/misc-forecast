@@ -7,9 +7,6 @@ library(ggplot2)
 library(wesanderson)
 library(tseries)
 
-source("R/helper.R")
-source("R/helper-transform-data.R")
-
 # ----
 
 # pick the ones with voting rights (class a), except for brk b
