@@ -1,55 +1,35 @@
 # helper functions
 
+
+# drops columns in df by names
+# name is a character vector including the columns to drop
 drop_col <- function(df, name){
   df <- df %>% select(-one_of(name))
 }
 
-normalise_by_first <- function(calc_period, stockdata, ticker){
-  
-  data <- NULL
-  start <- calc_period[1]
-  end <- calc_period[2]
-  
-  for (x in seq(length(ticker))) {
+# perform jarque bera test for normality
+  jarque_bera <- function(stockdata){
     
-    tmp <- stockdata %>%
-      filter(symbol == ticker[x]) %>%
-      filter_time(time_formula = start ~ end) %>%
-      arrange(date) %>%
-      mutate(first_norm = (adjusted/first(adjusted))-1)
-    
-    data <- bind_rows(data, tmp)
-  }
-  
-  data <- data %>% as_tbl_time(., index = date)
-  
-  return(data)
-  
-}
+      stocks_ts <- as.ts(stockdata %>% 
+                  select(symbol, rel_return, date) %>% 
+                  spread(symbol, rel_return))
+      
+      p_value <- NULL
 
-
-normalise_by_mean <- function(calc_period, stockdata, ticker){
-  
-  data <- NULL
-  start <- calc_period[1]
-  end <- calc_period[2]
-  
-  for (x in seq(length(ticker))) {
-    
-    tmp <- stockdata %>%
-      filter(symbol == ticker[x]) %>%
-      filter_time(time_formula = start ~ end) %>%
-      arrange(date) %>%
-      mutate(mean_norm = (adjusted/mean(adjusted))-1)
-    
-    data <- bind_rows(data, tmp)
+      for (i in seq(ncol(stocks_ts)-1)){
+        i <- i+1  
+        test <- jarque.bera.test(na.remove(stocks_ts[, i]))
+        p[i-1] <- test$p.value
+      }
+      
+      if (any(p_value>=0.01)){
+        print("For some stocks, returns might be normally distributed")
+        return(p_value)
+      } else {
+        print("The relative returns are NOT normally distributed for any of the given stocks")
+      }
+      
   }
-  
-  data <- data %>% as_tbl_time(., index = date)
-  
-  return(data)
-  
-}
 
 
 # colourpal takes in any of: 
