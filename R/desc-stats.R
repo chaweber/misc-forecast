@@ -3,47 +3,107 @@
 # including tests for normality & seasonality
 # and plot time series
 
+library(tibbletime)
+library(tidyquant)
+library(dplyr)
+library(ggplot2)
+library(wesanderson)
+
 source("R/get-data.R")
 source("R/helper.R")
 
-desc-stats <- function(){
-  
-  # set parameters 
-  startdate <- "1950-01-01"
-  tickers <- c("^GSPC", "^N225", "^FTLC", "BHF", 
-            "PWR", "DISCA", "UAA", "NWS", "AAPL", 
-            "MSFT", "AMZN", "FB",  "BRK-B")
-  
-  ### ----
+# set parameters 
+
+startdate <- "1950-01-01"
+enddate <- Sys.Date()
+tickers <- c("^GSPC", "^N225", "^FTLC", 
+             "NWSA", "UAA", "DISCA","PWR", #BHF
+             "SCG", "MAT", "SRCL", "HRB", "COTY", "EVHC", 
+             "AAPL", "MSFT", "AMZN", "FB",  "BRK-B",
+             "JPM", "GOOGL", "JNJ", "XOM", "BAC")
+
+# pick the ones with voting rights (class a), except for brk b
+# FB, COTY (only a)
+# GOOGL (c: GOOG), under armour (c: UA), NWSA (b: NWS)
+
+# brighthouse financial (BHF) weird incline 10-17 /7/2017?
+# > On August 4, 2017, Brighthouse Financial completed its separation from 
+# MetLife and began trading on the Nasdaq stock exchange on August 7
+
+tickernames <- c("GSPC", "N225", "FTLC", 
+             "NWSA", "UAA", "DISCA","PWR", "SCG", 
+             "MAT", "SRCL", "HRB", "COTY", "EVHC", 
+             "AAPL", "MSFT", "AMZN", "FB",  "BRK",
+             "JPM", "GOOGL", "JNJ", "XOM", "BAC")
+
+desc_stats <- function(tickers, tickernames, startdate, enddate){
   
   # fetch data
-  data <- NULL
-  close <- NULL
   
-  for (ticker in tickers){
-    tmp <- get_all_data(ticker = ticker, startdate = startdate)
-    close <- cbind(close, tmp[, 6])
-    data <- cbind(data, tmp)
+  stocks <- tickers %>%
+    tq_get(get = "stock.prices", from = startdate, to = enddate) %>%
+    as_tbl_time(., index= date)
+  
+  # re-set stock names & categorise into types
+  
+  for (x in seq(length(tickers))) {
+    
+    stocks <- stocks %>%
+      mutate(symbol = replace(symbol, symbol==tickers[x], tickernames[x]))
+    
   }
   
-  close_full <- na.omit(close)
-  data_full <- na.omit(data)
+  stocktypes <- sapply(stocks$symbol, function(x){
+    
+    if (x %in% c("FTLC", "N225", "GSPC")){
+      type <- "index"
+    } else if (x %in% c("AAPL", "AMZN", "FB", "MSFT", "BRK",  "JPM", "GOOGL", "JNJ", "XOM", "BAC")){
+      type <- "top"
+    } else {
+      type <- "bottom"
+    }  
+    
+  })
   
-  # re-name
-  ticker <- c("GSPC", "N225", "FTLC", "BHF", 
-               "PWR", "DISCA", "UAA", "NWS", "AAPL", 
-               "MSFT", "AMZN", "FB",  "BRK")
-  colnames(close) <- ticker
-  colnames(close_full) <- ticker
+  stocks$stocktype <- stocktypes
+  
+  
+  # calculate normalised adjusted value (beginning 2014)
+  
+  calc_period <- c("2014-01-01", "end")
+  
+  data <- stocks %>% normalise_by_first(calc_period = calc_period, 
+                             ticker = tickernames,
+                             stockdata = .) %>%
+    normalise_by_mean(calc_period = calc_period, 
+                            ticker = tickernames,
+                            stockdata = .)
 
-  
+
   ### ----
-  # plot 
   
-  normalise_series <- function(x){
-    x / coredata(x)[1]
-  }
+  #plot grid with all 
   
+  data %>%
+    ggplot(., aes(x = date, y = first_norm, color = symbol)) +
+    geom_line(size = 0.5) +
+    scale_color_manual(values = wes_palette(n=23, name="Rushmore1", type = "continuous")) +
+    facet_grid(stocktype ~.) +
+    labs(title = "Price Movement largest vs. smallest S&P 500 Companies", 
+         y = "Normalised Prices", 
+         x = "Date",
+         caption = "(based on daily adjusted closing prices, normalised resp. 01-01-2014)")
+  
+  
+  #plot index against top / bottom
+  
+  print(plot_base(ticker = c("NWSA", "UAA", "DISCA")))
+  
+
+   
+  # ---- 
+   
+   
   window <- "2013/"
   
   mytheme <- chart_theme()
