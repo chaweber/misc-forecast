@@ -7,29 +7,40 @@ drop_col <- function(df, name){
   df <- df %>% select(-one_of(name))
 }
 
-# perform jarque bera test for normality
-  jarque_bera <- function(stockdata){
+# Jarque Bera Test for Normality
+  jarque_bera <- function(stockdata, time_period){
     
       stocks_ts <- as.ts(stockdata %>% 
                   select(symbol, rel_return, date) %>% 
                   spread(symbol, rel_return))
-      
-      p_value <- NULL
+
+      p_list <- NULL
 
       for (i in seq(ncol(stocks_ts)-1)){
         i <- i+1  
         test <- jarque.bera.test(na.remove(stocks_ts[, i]))
-        p[i-1] <- test$p.value
+        p_list$pvalue[i-1] <- test$p.value
+        p_list$stock[i-1] <- colnames(stocks_ts)[i]
       }
       
-      if (any(p_value>=0.01)){
-        print("For some stocks, returns might be normally distributed")
-        return(p_value)
+      
+      if (any(p_list$pvalue>=0.01)){
+        
+        data <- tibble(stocks = p_list$stock,
+                       pvalues = p_list$pvalue) %>%
+          filter(pvalues >= 0.01)
+        
+        print(paste("For the following assets,", time_period, "returns might follow a normal distribution:"))
+        return(data)
+        
       } else {
-        print("The relative returns are NOT normally distributed for any of the given stocks")
+        print(paste("The", time_period, "relative returns are NOT normally distributed for any of the given assets"))
+        
       }
       
   }
+  
+
 
 
 # colourpal takes in any of: 
