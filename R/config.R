@@ -6,14 +6,14 @@
 # > On August 4, 2017, Brighthouse Financial completed its separation from 
 # MetLife and began trading on the Nasdaq stock exchange on August 7
 
-tickers <- c("^GSPC", "^N225", "^FTLC", 
-             "NWSA", "UAA", "DISCA","PWR", #BHF
-             "SCG", "MAT", "SRCL", "HRB", "COTY", "EVHC", 
+tickers <- c("^GSPC", "^N225", "^FTSE", 
+             "UAA", "DISCA","PWR", "NWSA", "SCG", 
+             "MAT", "SRCL", "HRB", "COTY", "EVHC", 
              "AAPL", "MSFT", "AMZN", "FB",  "BRK-B",
              "JPM", "GOOGL", "JNJ", "XOM", "BAC")
 
-tickernames <- c("GSPC", "N225", "FTLC", 
-                 "NWSA", "UAA", "DISCA","PWR", "SCG", 
+tickernames <- c("GSPC", "N225", "FTSE", 
+                 "UAA", "DISCA","PWR", "NWSA", "SCG", 
                  "MAT", "SRCL", "HRB", "COTY", "EVHC", 
                  "AAPL", "MSFT", "AMZN", "FB",  "BRK",
                  "JPM", "GOOGL", "JNJ", "XOM", "BAC")
