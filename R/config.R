@@ -17,3 +17,5 @@ tickernames <- c("GSPC", "N225", "FTSE",
                  "MAT", "SRCL", "HRB", "COTY", "EVHC", 
                  "AAPL", "MSFT", "AMZN", "FB",  "BRK",
                  "JPM", "GOOGL", "JNJ", "XOM", "BAC")
+
+enddate <- "2018-08-25"
