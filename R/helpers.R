@@ -1,74 +1,105 @@
-# helper functions
+# Helper Functions
 
-
-# drops columns in df by names
+# Drop columns in tibble by Names ----
 # name is a character vector including the columns to drop
 drop_col <- function(df, name){
   df <- df %>% select(-one_of(name))
 }
 
-# Jarque Bera Test for Normality
-  jarque_bera <- function(stockdata, time_period){
+# Test Function ----
+# requires package(tseries)
+
+test_stats <- function(FUN, fun_name, stockdata, by, text){
+  
+  period <- monthly_stocks$date[1:2] %>% diff.Date() %>% as.integer()
+  ifelse((period > 5), period <- "monthly", period <- "daily")
+  
+  if (fun_name == "JB"){
+
+    print(paste("The Jarque-Bera test tests the null that a sample follows a normal distribution."))
     
-      stocks_ts <- as.ts(stockdata %>% 
-                  select(symbol, rel_return, date) %>% 
-                  spread(symbol, rel_return))
+    text_1 <- paste("For the following assets, the", period, text, "might follow a normal distribution:")
+    text_2 <- paste("The", period, text, "are NOT normally distributed for any of the given assets (at a 99% confidence level).")
 
-      p_list <- NULL
+  } else if (fun_name == "LB"){
 
-      for (i in seq(ncol(stocks_ts)-1)){
-        i <- i+1  
-        test <- jarque.bera.test(na.remove(stocks_ts[, i]))
-        p_list$pvalue[i-1] <- test$p.value
-        p_list$stock[i-1] <- colnames(stocks_ts)[i]
-      }
-      
-      
-      if (any(p_list$pvalue>=0.01)){
-        
-        data <- tibble(stocks = p_list$stock,
-                       pvalues = p_list$pvalue) %>%
-          filter(pvalues >= 0.01)
-        
-        print(paste("For the following assets,", time_period, "returns might follow a normal distribution:"))
-        return(data)
-        
-      } else {
-        print(paste("The", time_period, "relative returns are NOT normally distributed for any of the given assets"))
-        
-      }
-      
+    print(paste("The Ljung-Box test tests the null of independence of observations in a time series."))
+    
+    text_1 <- paste("For the following assets,", period, "the", text, "might be independent:")
+    text_2 <- paste("The", period, text, "are NOT independent for all of the given assets (at a 99% confidence level).")
+
+  } else if (fun_name == "ADF"){
+    
+    print(paste("The Augmented Dick Fuller test tests for the null that the series has a unit root."))
+    #p-value >0.1
+    text_1 <- paste("For the following assets,", period, "the", text, "might be have a unit root:")
+    #p-value < 0.1
+    text_2 <- paste("For all given assets, the", period, text, "do NOT have a unit root (at a 99% confidence level).")
+    
+  } else {
+    stop("Error: Invalid Test Argument. Try 'JB', 'LB' or 'ADF'")
   }
   
+  monthly_xts <- monthly_stocks %>%
+    as.tibble() %>%
+    tbl_xts(cols_to_xts = by, spread_by = "symbol")
 
-
-
-# colourpal takes in any of: 
-# BottleRocket1, BottleRocket2, Rushmore1, 
-# Royal1, Royal2, Zissou1, Darjeeling1, Darjeeling2, 
-# Chevalier1 , FantasticFox1 , Moonrise1, Moonrise2, 
-# Moonrise3, Cavalcanti1, GrandBudapest1, GrandBudapest2, 
-# IsleofDogs1, IsleofDogs2
-
-plot_base <- function(stockdata = data, 
-                    ticker, 
-                    title = "Adjusted Closing Prices", 
-                    ylab = "Price", 
-                    xlab = "Date", 
-                    caption = NULL, 
-                    colourpal = "Darjeeling1")
-  {
+  p_list <- NULL
   
-  plot <- stockdata %>%
-    filter(symbol %in% ticker) %>%
-    rownames_to_column() %>%
-    ggplot(., aes(x = date, y = adjusted, color = symbol)) +
-    geom_line(size = 0.5) +
-    scale_color_manual(values = wes_palette(n=4, name = colourpal)) +
-    labs(title = title, 
-         y = ylab, 
-         x = xlab,
-         caption = caption)
+  for (i in seq(ncol(stocks_ts)-1)){
+    i <- i+1  
+    test <- FUN(na.remove(stocks_ts[, i]))
+    p_list$pvalue[i-1] <- test$p.value
+    p_list$stock[i-1] <- colnames(stocks_ts)[i]
+  }
   
-  return(plot)
+  if (any(p_list$pvalue>=0.01)){
+    data <- tibble(stocks = p_list$stock,
+                   pvalues = p_list$pvalue) %>%
+      filter(pvalues >= 0.01)
+    
+    print(paste(text_1))
+    return(data)
+    
+  } else {
+    print(paste(text_2))
+  }
+  
 }
+  
+
+# Get ACF----  
+  get_acf <- function(stockdata, by){
+    
+    acf_data <- stockdata %>%
+      nest(-symbol) %>%
+      mutate(acf_results = map(data, ~ acf(.x[[by]], plot = F)),
+             acf_values = map(acf_results, ~ drop(.x$acf))) %>%
+      unnest(acf_values) %>%
+      group_by(symbol) %>%
+      mutate(lag = seq(0, n()-1),
+             cutoff_upper = -qnorm(0.1/2)/(n())^0.5,
+             cutoff_lower = qnorm(0.1/2)/(n())^0.5)
+    
+    return(acf_data)
+
+  }
+  
+# get correlations between assets ----
+  get_corr <- function(stockdata, 
+                       stocktypes = c("index", "bottom"), 
+                       variable = "rel_return")
+    {
+    
+    corr_data <- stockdata %>%
+      filter(stocktype %in% stocktypes) %>%
+      select(symbol, date, variable) %>%
+      spread(symbol, variable) %>%
+      drop_col(., name = "date") %>%
+      correlate(use = "pairwise.complete.obs", quiet = TRUE) %>%    
+      rearrange(method = "HC", absolute = FALSE)  %>% 
+      shave()
+    
+    return(corr_data)
+    
+  }
