@@ -13,8 +13,8 @@
 #' @return returns modified tbbl_time with new column "first_norm" / "mean_norm"  
 
 normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker, by){
-  
-  data <- NULL
+
+  normal_data <- NULL
   start <- calc_period[1]
   end <- calc_period[2]
     
@@ -27,7 +27,8 @@ normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker,
         arrange(date) %>%
         mutate(first_norm = (adjusted/first(adjusted))-1)
       
-      data <- bind_rows(data, tmp)
+      normal_data <- bind_rows(normal_data, tmp)
+      name <- "first_norm"
     }
   
   } else if (by == "mean") {
@@ -39,15 +40,20 @@ normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker,
         arrange(date) %>%
         mutate(mean_norm = (adjusted/mean(adjusted))-1)
       
-      data <- bind_rows(data, tmp)
+      normal_data <- bind_rows(normal_data, tmp)
+      name <- "mean_norm"
     }  
     
   } else {
       stop("Error: Argument 'by' out of range. Choose either 'mean' or 'first'")
   }
     
-  data <- data %>% as_tbl_time(., index = date)
-  return(data)
+  normal_data <- normal_data %>% 
+    as_tbl_time(., index = date) %>%
+    mutate(adjusted = eval(as.name(name))) %>%
+    drop_col(paste(name))
+  
+  return(normal_data)
   
 }
 
@@ -80,4 +86,69 @@ get_returns <- function(stockdata, period = "daily", type = "log", colname = "lo
   
   return(returns)
   
+}
+# Add Lagged Values (log_returns or prices) ----
+
+add_lags <- function(stockdata, lag, by){
+
+  col_names <- paste0("lag_", lag)
+  
+  if (by == "log_return"){
+    lagged_data <- stockdata %>%
+      group_by(symbol) %>%
+      tq_mutate(select = log_return,
+                mutate_fun = lag.xts,
+                k = lag,
+                col_rename = col_names) %>%
+      ungroup() 
+  } else {
+    lagged_data <- stockdata %>%
+      group_by(symbol) %>%
+      tq_mutate(select = adjusted,
+                mutate_fun = lag.xts,
+                k = lag,
+                col_rename = col_names) %>%
+      ungroup() 
+  }
+  return(lagged_data)
+}
+
+# Split Data into Train, Validation & Test Set for a given Ticker ----
+splitframe <- function(data, trainshare, testshare){
+    
+    data <- data %>%
+      arrange(date)
+    
+    trainrow <- round(nrow(data)*trainshare)
+    train <- data[1:trainrow,]
+    train <- add_column(train, "group" := "train")
+    
+    if (trainshare + testshare > 1){
+      
+      stop("Error: Invalid Shares")
+      
+    } else if ((trainshare + testshare) == 1) {
+      
+      test <- data[trainrow:nrow(data),]
+      test <- add_column(test, "group" := "test")
+      
+      valid <- NULL
+      
+    } else {
+      validshare <- 1- (trainshare + testshare)
+      
+      validrow <- trainrow + round(nrow(data)*validshare)
+      
+      valid <- data[(trainrow+1):validrow,]
+      valid <- add_column(valid, "group" := "valid")
+      
+      test <- data[(validrow+1):nrow(data), ] 
+      test <- add_column(test, "group" := "test")
+      
+    }
+    
+    splitdata <- bind_rows(train, valid, test) %>%
+      as_tbl_time(index = date)
+    
+    return(splitdata)
 }

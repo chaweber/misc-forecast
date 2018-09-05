@@ -6,43 +6,50 @@ drop_col <- function(df, name){
   df <- df %>% select(-one_of(name))
 }
 
-# Test Function ----
+# Negate %in% operator ----
+
+"%notin%" <- Negate("%in%")
+
+# Function for Hypothesis Test ----
 # requires package(tseries)
 
-test_stats <- function(FUN, fun_name, stockdata, by, text){
-  
-  period <- monthly_stocks$date[1:2] %>% diff.Date() %>% as.integer()
-  ifelse((period > 5), period <- "monthly", period <- "daily")
+test_stats <- function(fun_name, stockdata, by){
   
   if (fun_name == "JB"){
+    
+    FUN <- jarque.bera.test
 
     print(paste("The Jarque-Bera test tests the null that a sample follows a normal distribution."))
     
-    text_1 <- paste("For the following assets, the", period, text, "might follow a normal distribution:")
-    text_2 <- paste("The", period, text, "are NOT normally distributed for any of the given assets (at a 99% confidence level).")
+    text_1 <- paste("For the following assets, the series might follow a normal distribution:")
+    text_2 <- paste("The series is NOT normally distributed for any of the given assets (at a 99% confidence level).")
 
   } else if (fun_name == "LB"){
+    
+    FUN <- Box.test
 
     print(paste("The Ljung-Box test tests the null of independence of observations in a time series."))
     
-    text_1 <- paste("For the following assets,", period, "the", text, "might be independent:")
-    text_2 <- paste("The", period, text, "are NOT independent for all of the given assets (at a 99% confidence level).")
+    text_1 <- paste("For the following assets, the series might be independent:")
+    text_2 <- paste("The series is NOT independent for all of the given assets (at a 99% confidence level).")
 
   } else if (fun_name == "ADF"){
     
-    print(paste("The Augmented Dick Fuller test tests for the null that the series has a unit root."))
+    FUN <- adf.test
+    
+    print(paste("The Augmented Dickey Fuller test tests for the null that the series has a unit root."))
     #p-value >0.1
-    text_1 <- paste("For the following assets,", period, "the", text, "might be have a unit root:")
+    text_1 <- paste("For the following assets, the series might be have a unit root:")
     #p-value < 0.1
-    text_2 <- paste("For all given assets, the", period, text, "do NOT have a unit root (at a 99% confidence level).")
+    text_2 <- paste("For all given assets, the series does NOT have a unit root (at a 99% confidence level).")
     
   } else {
     stop("Error: Invalid Test Argument. Try 'JB', 'LB' or 'ADF'")
   }
   
-  monthly_xts <- monthly_stocks %>%
+  stocks_ts <- stockdata %>%
     as.tibble() %>%
-    tbl_xts(cols_to_xts = by, spread_by = "symbol")
+    tbl2xts::tbl_xts(cols_to_xts = by, spread_by = "symbol")
 
   p_list <- NULL
   
@@ -96,9 +103,9 @@ test_stats <- function(FUN, fun_name, stockdata, by, text){
       select(symbol, date, variable) %>%
       spread(symbol, variable) %>%
       drop_col(., name = "date") %>%
-      correlate(use = "pairwise.complete.obs", quiet = TRUE) %>%    
-      rearrange(method = "HC", absolute = FALSE)  %>% 
-      shave()
+      corrr::correlate(use = "pairwise.complete.obs", quiet = TRUE) %>%    
+      corrr::rearrange(method = "HC", absolute = FALSE)  %>% 
+      corrr::shave()
     
     return(corr_data)
     

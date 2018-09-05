@@ -1,13 +1,19 @@
-library(corrr)
-library(purrr)
-library(tseries)
-library(stats)
+#' function to get desc stats 
+#'
+#' @param data 
+#' @param by chr either "prices" or "returns"
+#' @param stocktypes 
+#'
+#' @return
+#' 
+#' @import library(corrr)
+#' @import library(purrr)
+#' @import library(tseries)
+#' @import library(stats)
+#' 
+#' @source R/02-helpers.R
+#' @source R/03-helpers-transform.R
 
-source("R/helpers.R")
-source("R/helpers-transform.R")
-
-# function to get desc stats 
-# by takes in either "prices" or "returns"
 
 desc_stats <- function(data, by = "log_return", stocktypes = c("index", "bottom")){
   
@@ -45,28 +51,21 @@ desc_stats <- function(data, by = "log_return", stocktypes = c("index", "bottom"
               kurt = kurtosis(eval(as.name(by))))
   
   # test for normality
-  jb <- test_stats(FUN = jarque.bera.test,
-             fun_name = "JB",
+  jb <- test_stats(fun_name = "JB",
              stockdata = data,
-             by = by,
-             text = name)
+             by = by)
   print(jb)
   
   
   # (3) investigate stationarity ----
   
-  box <- test_stats(FUN = Box.test,
-             fun_name = "LB",
-             stockdata = data,
-             by = by,
-             text = name)
+  box <- test_stats(fun_name = "LB",
+             stockdata = data)
   print(box)
   
-  adf <- test_stats(FUN = adf.test,
-             fun_name = "ADF",
+  adf <- test_stats(fun_name = "ADF",
              stockdata = data,
-             by = by,
-             text = name)
+             by = by)
   print(adf)
   
   # get acf

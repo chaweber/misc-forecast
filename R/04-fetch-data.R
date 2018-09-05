@@ -5,32 +5,33 @@
 #' @param tickernames a vector specifying the tickers of the desired stocks to pull.
 #' @param startdate chr in "YYYY-mm-dd" date format. Defaults to "1950-01-01".
 #' @param enddate chr in "YYYY-mm-dd" date format. Defaults to current date.
+#' @param period chr specifying the desired period. Should be either "monthly" or "daily".
 #'
 #' @return a list including two tbbl_time elements (in long format), "dailiy_stocks" and "monthly_stocks".
 #' Each tbbl consists of the following columns: 
 #' date, symbols (set by tickernames), open, high, low, close, adjusted, log_returns, rel_returns, type.
 #' Type categorises the assets into either "index", "top" or "bottom" and is hard-coded for all tickers in config.
 #'
-#' @requires library(tibbletime)
-#' @requires library(tidyquant)
-#' @requires library(dplyr)
-
-library(tibbletime)
-library(tidyquant)
-library(dplyr)
-
-source("R/helpers-transform.R")
+#' @import tibbletime
+#' @import tidyquant
+#' @import dplyr
+#' 
+#' @source R/03-helpers-transform.R
 
 fetch_data <- function(tickers, 
                        tickernames, 
                        startdate = "1950-01-01", 
-                       enddate = Sys.Date()){
-  
+                       enddate = Sys.Date(),
+                       period = "daily"){
   # fetch data
-  
+
   stocks <- tickers %>%
     tq_get(get = "stock.prices", from = startdate, to = enddate) %>%
     as_tbl_time(., index= date)
+  
+  if (is.null(stocks)){
+    stop("Error: Data could not be queried from Yahoo Finance")
+  }
   
   # re-set stock names & categorise into types
   
@@ -58,19 +59,13 @@ fetch_data <- function(tickers,
   
   # add returns on a monthly / daily base, removes any NAs
 
-  stocks_month <- stocks %>%
-    group_by(symbol) %>%
-    as_period(., period = "monthly") %>%
-    ungroup() %>%
-    get_returns(stockdata = ., period = "monthly", type = "log", colname = "log_return") %>%
-    get_returns(stockdata = ., period = "monthly", type = "arithmetic", colname = "rel_return") 
-  
   stocks <- stocks %>%
-    get_returns(stockdata = .) %>%
-    get_returns(stockdata = ., type = "arithmetic", colname = "rel_return") 
+    group_by(symbol) %>%
+    as_period(., period = period) %>%
+    ungroup() %>%
+    get_returns(stockdata = ., period = period, type = "log", colname = "log_return") %>%
+    get_returns(stockdata = ., period = period, type = "arithmetic", colname = "rel_return")
   
-  
-  return(list(daily_stocks = stocks, 
-              monthly_stocks = stocks_month))
+  return(stocks)
   
   }
