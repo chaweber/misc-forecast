@@ -1,11 +1,19 @@
 .Rproj.user
+.Rproj*
 .Rhistory
 .RData
 .Ruserdata
+<<<<<<< HEAD
 
 .DS_Store
 .DS_Store?
 ._*
+=======
+.DS_Store
+.DS_Store*
+._*
+.RData
+>>>>>>> devbranch
 .Spotlight-V100
 .Trashes
 ehthumbs.db
