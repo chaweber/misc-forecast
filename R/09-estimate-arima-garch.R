@@ -4,7 +4,7 @@
 #' Must be one of either "log_return" or "adjusted". Defaults to "log_return"
 #' @param period chr giving the periodicity of series. must be either "daily" or "monthly". 
 #' Defaults to "daily".
-#' @param testsplit int ratio of test sample. Defaults to 0.2
+#' @param test_split int ratio of test sample. Defaults to 0.2
 #'
 #' @return tibble listing ME, RMSE, MAE, MPE, MAPE of ARIMA-GARCH for all stocks
 #'
@@ -14,18 +14,13 @@
 #' @source R/01-config.R
 #' @source R/econometrics/01-prepare-ts.R
 
-source("R/01-config.R")
-source("R/econometrics/01-prepare-ts.R")
-
-arima_garch <- function(by = "log_return", period = "daily", testsplit = 0.2){
+arima_garch <- function(stockdata, by = "log_return", period = "daily", test_split = 0.2){
 
   # read data ----
-  data <- prepare_ts_data(tickers = tickers, 
-                          tickernames = tickernames, 
+  data <- prepare_ts_data(stockdata = stockdata,
                           startdate = startdate, 
                           enddate = enddate,
-                          by = by,
-                          period = period)
+                          by = by)
   
   performance <- NULL
   
@@ -64,7 +59,7 @@ arima_garch <- function(by = "log_return", period = "daily", testsplit = 0.2){
     
     arima_box <- Box.test(arima$residuals)
     
-    test_sample <- round(testsplit * length(data[, x]))
+    test_sample <- round(test_split * length(data[, x]))
     n <- length(data[, x])
 
     if (arima_box$p.value >= 0.1){
@@ -141,9 +136,6 @@ arima_garch <- function(by = "log_return", period = "daily", testsplit = 0.2){
                                                n.roll = test_sample,
                                                out.sample = test_sample)
       
-      # sigma: conditional sigma forecasts (conditional volatility,  sqrt of conditional variance)
-      # fittedFor: conditional mean forecasts
-
       # get performance measures
       accuracy <- forecast::accuracy(f = as.vector(garch_predict@forecast$seriesFor), 
                          x = data[, x][(n-test_sample):n])

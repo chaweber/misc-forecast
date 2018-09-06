@@ -1,9 +1,10 @@
-# for log return
+# hard-coded for log return
 
-estimate_ml <- function(stockdata, lags, by){
-  
-  # read data ----
-  data <- prepare_ml_data(stockdata, 
+estimate_ml <- function(stockdata, lags, by = "log_return"){
+
+  # format data ----
+  print("Formating Data to h2o Frame...")
+  data <- prepare_ml_data(stockdata = stockdata, 
                           tickernames = tickernames, 
                           startdate = startdate, 
                           enddate = enddate,
@@ -12,110 +13,115 @@ estimate_ml <- function(stockdata, lags, by){
                           test = 0.1,
                           by = by)
   
+  # fix training parameters ----
+  params <- list(ntrees = c(5, 80), 
+                 max_depth = c(2, 20), 
+                 learn_rate = c(0.001, 0.3))
+  
+  search_criteria <- list(strategy = "RandomDiscrete", 
+                          max_runtime_secs = 900, 
+                          stopping_metric = "MAE", 
+                          stopping_tolerance = 0.0001, 
+                          stopping_rounds = 6, 
+                          seed = 40)
+  
+  y <- by
+  x <- paste0("lag_", lags)
+  
+  performance <- NULL
+  
+  # init h2o ----
+  h2o::h2o.init(ip = "localhost", min_mem_size = "2G", max_mem_size = "5G")
+  
   for(ticker in tickernames){
     
-    # init h2o ----
-    h2o::h2o.init(ip = "localhost", min_mem_size = "2G", max_mem_size = "5G")
-    
-    train <- data  %>% filter(symbol = ticker) %>% filter(group == "train") %>% h2o::as.h2o()
-    test <- data %>% filter(symbol = ticker) %>% filter(group == "test") %>% h2o::as.h2o()
+    train <- data  %>% filter(symbol == ticker) %>% filter(group == "train") %>% h2o::as.h2o()
+    test <- data %>% filter(symbol == ticker) %>% filter(group == "test") %>% h2o::as.h2o()
     
     if (nrow(data  %>% filter(group == "valid")) > 0){
-      valid <- data  %>% filter(symbol = ticker) %>% filter(group == "valid") %>% h2o::as.h2o()
+      valid <- data  %>% filter(symbol == ticker) %>% filter(group == "valid") %>% h2o::as.h2o()
     }
-    
-    # fix training parameters ----
-    params <- list(forest = list(ntrees = c(20, 80), 
-                                 max_depth = c(5, 50)),
-                   boost = list(ntrees = c(20, 80), 
-                                max_depth = c(2, 20), 
-                                learn_rate = c(0.01, 0.3)))
-    
-    search_criteria <- list(strategy = "RandomDiscrete", 
-                            max_runtime_secs = 900, 
-                            stopping_metric = "MSE", 
-                            stopping_tolerance = 0.001, 
-                            stopping_rounds = 6, 
-                            seed = 40)
-    
-    # set variables
-    y <- by
-    x <- paste0("lag_", lags)
     
     # perform grid search----
     
-    # Regression Forest
-    rf <- h2o::h2o.grid("randomForest",
-                        y = y, 
-                        x = x, 
-                        training_frame = train,
-                        validation_frame = valid, 
-                        hyper_params = params$forest,
-                        search_criteria = search_criteria,
-                        grid_id = "rf")
-    
     # GBM
+    print("Training GBM...")
     gbm <- h2o::h2o.grid("gbm",
                          y = y, 
                          x = x, 
                          training_frame = train,
                          validation_frame = valid, 
-                         hyper_params = params$gbm,
+                         hyper_params = params,
                          search_criteria = search_criteria,
-                         grid_id = "gbm")
+                         grid_id = paste0("gbm_", ticker))
     
-    # get best model of each grid ----
-    rf_grid <- h2o::h2o.getGrid(grid_id = "rf", sort_by = "RMSE", decreasing = TRUE)
-    rf_best <- h2o::h2o.getModel(rf_grid@model_ids[[1]])
-    
-    cat(title = paste("RF of", ticker),
-        capture.output(summary(rf_best)), 
-        file=paste0("rf_", ticker, ".txt"), 
-        sep="n", 
-        append = TRUE)
-    
-    gbm_grid <- h2o::h2o.getGrid(grid_id = "gbm", sort_by = "RMSE", decreasing = TRUE)
+    # get best model ----
+    print("Done. Getting Predictions...")
+
+    gbm_grid <- h2o::h2o.getGrid(grid_id = paste0("gbm_", ticker), sort_by = "MSE", decreasing = TRUE)
     gbm_best <- h2o::h2o.getModel(gbm_grid@model_ids[[1]])
     
-    cat(title = paste("RF of", ticker),
-        capture.output(summary(rf_best)), 
-        file=paste0("rf_", ticker, ".txt"), 
+    cat(title = paste("GBM of", ticker),
+        capture.output(summary(gbm_best)), 
+        file=paste0("gbm_", ticker, ".txt"), 
         sep="n", 
         append = TRUE)
     
     # investigate performance of best model on test set ----
     
-    rf_performance <- h2o::h2o.performance(model = rf_best, newdata = test)
     gbm_performance <- h2o::h2o.performance(model = gbm_best, newdata = test)
     
     # Get Predictions on Test Set and merge to Data
     
-    rf_predictions <- h2o::h2o.predict(rf_best, test) %>% as.vector
     gbm_predictions <- h2o::h2o.predict(gbm_best, test) %>% as.vector
     
     test_predict <- data %>%
-      filter(symbol = ticker) %>%
+      filter(symbol == ticker) %>%
       filter(group == "test") %>% 
       select(symbol, group, stocktype, date, log_return) %>%
-      add_column(., "prediction_gbm" := gbm_predictions) %>%
-      add_column(., "prediction_rf" := rf_predictions)
+      add_column(., "prediction_gbm" := gbm_predictions)
+      
+    # get accuracy on test set
+    accuracy <- forecast::accuracy(f = test_predict %>% select(prediction_gbm) %>% as.ts(),
+                                   x = test_predict %>% select(log_return) %>% as.ts())
+
+    accuracy <- accuracy %>%
+      as.tibble() %>%
+      mutate(name = ticker)
+
+    performance <- rbind(performance, accuracy)
     
-    accuracy <- forecast::accuracy(f = as.vector(test_predict$prediction_rf), 
-                                   x = test_predict %>% select(log_return))
+    # plot ----
     
     data_predict <- data %>%
-      filter(symbol = ticker) %>%
+      filter(symbol == ticker) %>%
       filter(group %in% c("train", "valid")) %>% 
       select(symbol, group, stocktype, date, log_return) %>% 
-      add_column(., "prediction_gbm" := as.numeric(NA)) %>%
-      add_column(., "prediction_rf" := as.numeric(NA))
+      add_column(., "prediction_gbm" := as.numeric(NA))
     
-    data_predict <- union(data_predict, test_predict) %>%
+    data_predict <- bind_rows(data_predict, test_predict) %>%
       as_tbl_time(index = date) %>%
-      arrange(date) %>%
-      group_by(symbol)
+      arrange(date)
     
+    jpeg(filename = paste0("gbm_forecast_", ticker, ".jpg"), width = 1000, units = "px")
+    data_predict %>%
+      filter_time(time_formula = "2017-01-01" ~ "end") %>%
+      ggplot(aes(x = date)) +
+      theme_tq() +
+      geom_line(aes(y = (log_return)^2, colour = symbol), colour = "black", size = 0.8, alpha = 0.8) +
+      geom_line(aes(y = (prediction_gbm)^2, colour = symbol), colour = "red", size = 0.8) +
+      labs(title = "GBM One-Day Ahead Forecast of Volatility",
+           subtitle = paste(ticker),
+           x = "Date",
+           y = "Value")
+    dev.off()
     
+    jpeg(filename = paste0("gbm_varimp_", ticker, ".jpg"), width = 1000, units = "px")
+    h2o.varimp_plot(gbm_best)
+    dev.off()
   }
   
+  # return ----
+  h2o.shutdown(prompt = FALSE)
+  return(performance)
 }

@@ -8,17 +8,17 @@
 #' Must be in order ("start", "end") and in format "YYYY-mm-dd". 
 #' @param stockdata a tbbl_time containing the stock prices to adjust.
 #' @param ticker a chr vector containing the tickers of all assets that should be included.
-#' @param by a chr, must be either "mean" or "first". Argument to normalise series by.
+#' @param normalise_by a chr, must be either "mean" or "first". Argument to normalise series by.
 #' 
 #' @return returns modified tbbl_time with new column "first_norm" / "mean_norm"  
 
-normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker, by){
+normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker, normalise_by){
 
   normal_data <- NULL
   start <- calc_period[1]
   end <- calc_period[2]
     
-  if (by == "first"){
+  if (normalise_by == "first"){
     
     for (x in seq(length(ticker))) {
       tmp <- stockdata %>%
@@ -31,7 +31,7 @@ normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker,
       name <- "first_norm"
     }
   
-  } else if (by == "mean") {
+  } else if (normalise_by == "mean") {
     
     for (x in seq(length(ticker))) {
       tmp <- stockdata %>%
@@ -45,7 +45,7 @@ normalise_prices <- function(calc_period = c("start", "end"), stockdata, ticker,
     }  
     
   } else {
-      stop("Error: Argument 'by' out of range. Choose either 'mean' or 'first'")
+      stop("Error: Argument 'normalise_by' out of range. Choose either 'mean' or 'first'")
   }
     
   normal_data <- normal_data %>% 

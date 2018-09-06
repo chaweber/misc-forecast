@@ -18,54 +18,43 @@
 #' @source R/03-helpers-transform.R
 #' @source R/04-fetch-data.R
 
-source("R/02-helpers.R")
-source("R/03-helpers-transform.R")
-source("R/04-fetch-data.R")
+prepare_ml_data <- function(stockdata,
+                            tickernames, 
+                            startdate, 
+                            enddate = Sys.Date(), 
+                            period = "daily", 
+                            by = "log_return",
+                            train = 0.8,
+                            test = 0.1,
+                            lags = 1:10){
 
-prepare_ml_data <- function(tickers, 
-                         tickernames, 
-                         startdate, 
-                         enddate = Sys.Date(), 
-                         period = "daily", 
-                         by = "log_return",
-                         train = 0.8,
-                         test = 0.1,
-                         lags = 1:10){
 
   if (by %notin% c("log_return", "rel_return", "adjusted", "open", "close", "high", "low")){
     stop("Invalid target variable.")
   }
   
-  # read data ----
-  data <- fetch_data(tickers = tickers, 
-                     tickernames = tickernames,
-                     startdate = startdate,
-                     enddate = enddate,
-                     period = period)
-  
   if (by %notin% c("log_return", "rel_return")){
     
     # mean-normalise prices ----
-    # when all tickers are included, the period may not cover dates before any of the company's IPO!
-    data <- normalise_prices(calc_period = c(startdate, enddate), stockdata = data, ticker = tickernames, by = "mean")
+    stockdata <- normalise_prices(calc_period = c(startdate, enddate), stockdata = stockdata, ticker = tickernames)
     
   }
   
    # add lagged values ---- IS HARD-CODED FOR EITHER "log_return" OR "adjusted"!!!
-  data <- add_lags(data, lag = lags, by = by)
+    stockdata <- add_lags(stockdata = stockdata, lag = lags, by = by)
   
 
-  #  split data ----
-  data <- data %>%
+  # split data ----
+    stockdata <- stockdata %>%
     nest(-symbol) %>%
     mutate(split =  map(data, splitframe,
                         trainshare = train,
                         testshare = test)) %>%
     unnest(split)
   
-  # train <- data  %>% filter(group == "train")
-  # test <- data  %>% filter(group == "test")
-  # valid <- data  %>% filter(group == "valid")
+  # train <- stockdata  %>% filter(group == "train")
+  # test <- stockdata  %>% filter(group == "test")
+  # valid <- stockdata  %>% filter(group == "valid")
   
   # plot train test & validation period -----
   # daily_stocks %>%
@@ -95,6 +84,6 @@ prepare_ml_data <- function(tickers,
   #        y = "Price",
   #        subtitle = "COTY Daily Adjusted Closing Price") 
   
-  return(data)
+  return(stockdata)
   
 }

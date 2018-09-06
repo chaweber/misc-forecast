@@ -94,7 +94,7 @@ test_stats <- function(fun_name, stockdata, by){
   
 # get correlations between assets ----
   get_corr <- function(stockdata, 
-                       stocktypes = c("index", "bottom"), 
+                       stocktypes = c("index", "bottom", "top"), 
                        variable = "rel_return")
     {
     
